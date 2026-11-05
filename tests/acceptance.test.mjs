@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, test as nodeTest } from 'node:test';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -56,10 +57,41 @@ after(async () => {
 async function withStore(run, options = {}) {
   const context = await browser.newContext(options);
   const page = await context.newPage();
+  const messages = [];
+  page.on('console', entry => messages.push({ type: entry.type(), text: entry.text() }));
+  page.on('pageerror', error => messages.push({ type: 'pageerror', text: error.stack || error.message }));
+  await page.addInitScript(() => {
+    window.testFormEvents = [];
+    for (const type of ['submit', 'invalid']) document.addEventListener(type, event => {
+      const form = event.target.form || event.target;
+      window.testFormEvents.push({ type, target: event.target.name || event.target.id,
+        values: form instanceof HTMLFormElement ? Object.fromEntries(new FormData(form)) : null });
+    }, true);
+  });
   try {
     await page.goto(baseURL);
     await page.evaluate(async () => { await (await import('./js/db.js')).openDB(); });
     await run(page, context);
+  } catch (error) {
+    // Keep browser state from CI failures without hiding the original assertion.
+    try {
+      await mkdir('test-results', { recursive: true });
+      const stem = `test-results/failure-${Date.now()}`;
+      const state = await page.evaluate(() => ({
+        url: location.href, title: document.title, events: window.testFormEvents,
+        fields: [...document.querySelectorAll('input,select')].map(input => ({
+          name: input.name, value: input.value, valid: input.validity.valid,
+          validationMessage: input.validationMessage, disabled: input.disabled,
+        })),
+        buttons: [...document.querySelectorAll('button')].map(button => ({ text: button.textContent.trim(), disabled: button.disabled })),
+        alerts: [...document.querySelectorAll('[role="alert"]')].map(alert => ({ text: alert.textContent, hidden: alert.hidden })),
+        toast: document.querySelector('#toast')?.textContent,
+      }));
+      await writeFile(`${stem}.json`, JSON.stringify({ error: error.stack || String(error), messages, state }, null, 2));
+      await page.screenshot({ path: `${stem}.png`, fullPage: true, timeout: 5000 });
+      console.error(`Browser failure details: ${stem}.json and ${stem}.png`);
+    } catch (diagnosticError) { console.error('Could not capture browser failure:', diagnosticError.message); }
+    throw error;
   } finally {
     await context.close();
   }
@@ -115,6 +147,14 @@ test('new products start empty; receiving and selling atomically maintain stock 
     assert.equal(await page.evaluate(async () => (await (await import('./js/db.js')).listProducts())[0].stock), 0);
   });
 });
+
+async function waitForEntrySaved(page) {
+  await page.waitForFunction(() => {
+    const form = document.querySelector('#entry-form');
+    return form && !form.querySelector('[type="submit"]').disabled
+      && form.elements.quantity.value === '' && form.elements.productId.value === '';
+  }, null, { timeout: 10000 });
+}
 
 test('invalid quantities, money and duplicate specifications cannot alter data', async () => {
   await withStore(async page => {
@@ -339,8 +379,10 @@ test('mobile UI completes product, purchase, sale, search, history and confirmed
     await page.getByLabel(/^商品规格/).selectOption(product.id);
     await page.getByLabel(/^数量/).fill('10');
     await page.getByRole('button', { name: '确认进货', exact: true }).click();
+    await waitForEntrySaved(page);
     await page.waitForFunction(async () => (await (await import('./js/db.js')).listProducts())[0].stock === 10);
     await nav.getByRole('button', { name: '销售', exact: true }).click();
+    await page.getByRole('heading', { name: '销售登记', exact: true }).waitFor();
     await page.getByLabel(/^商品规格/).selectOption(product.id);
     await page.getByLabel(/^数量/).fill('11');
     await page.getByLabel(/^实际售价/).fill('119.01');
@@ -349,8 +391,10 @@ test('mobile UI completes product, purchase, sale, search, history and confirmed
     assert.equal(await page.evaluate(async () => (await (await import('./js/db.js')).listProducts())[0].stock), 10);
     await page.getByLabel(/^数量/).fill('3');
     await page.getByRole('button', { name: '确认销售', exact: true }).click();
+    await waitForEntrySaved(page);
     await page.waitForFunction(async () => (await (await import('./js/db.js')).listProducts())[0].stock === 7);
     await nav.getByRole('button', { name: '库存', exact: true }).click();
+    await page.getByRole('heading', { name: '我的库存', exact: true }).waitFor();
     const search = page.getByRole('searchbox', { name: '搜索商品', exact: true });
     await search.fill('不存在的商品');
     await page.getByRole('heading', { name: '没有找到商品', exact: true }).waitFor();
