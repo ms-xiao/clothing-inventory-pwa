@@ -1,0 +1,48 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, feat/local-inventory-v1]
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Branch to publish (for example feat/local-inventory-v1)'
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_branch || github.ref }}
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Prepare static application only
+        run: |
+          mkdir -p _site/js _site/icons
+          cp index.html styles.css sw.js manifest.webmanifest _site/
+          cp js/app.js js/db.js _site/js/
+          cp icons/* _site/icons/
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
