@@ -19,3 +19,5 @@
 测试数据只存在于测试浏览器上下文，运行应用不会生成演示数据。测试文件可在 `tests/acceptance.test.mjs` 检查和重跑。
 
 尚未完成：iPhone/iPad 真机 Safari、主屏幕安装、操作系统存储回收及长时间离线测试。Chromium 响应式视口测试不能代替真机验收。公开 Pages 部署情况以 PR 交付说明和 Actions 实际状态为准。
+
+远程环境修正：GitHub `ubuntu-latest` 已使用 Ubuntu 26.04，Playwright 1.57 的浏览器依赖安装不支持该版本，因此 CI 明确固定为受支持的 `ubuntu-24.04`。Pages 初次创建返回 `Resource not accessible by integration`，需要管理员先在仓库设置启用 GitHub Actions 类型的 Pages。

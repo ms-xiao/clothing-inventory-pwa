@@ -59,6 +59,8 @@ npm test
 
 首次启用需仓库允许 Pages/Actions 且具备相应权限。工作流会尝试启用 Pages；若组织策略阻止，请在 Settings → Pages 中选择 GitHub Actions。只有部署任务成功且实际 URL 可访问，才算部署完成。PR 未合并时 main 不包含第一版应用，合并后会自动部署。
 
+本次首次部署实际受阻：`configure-pages` 创建站点时返回 `Resource not accessible by integration`。当前 Actions 令牌无法首次创建 Pages 站点，尚无已验证的公开预览。仓库管理员可打开 Settings → Pages，将 Source 设为 GitHub Actions，然后重新运行 Deploy GitHub Pages（选择 `feat/local-inventory-v1`）发布第一版。工作流部署不会上传本地账本或备份数据。
+
 ## 文件结构
 
 - `index.html` / `styles.css`：响应式界面与移动端底部导航。
