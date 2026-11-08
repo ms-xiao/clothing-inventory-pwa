@@ -13,20 +13,28 @@ jobs:
     # Playwright 1.57 supports 24.04; avoid an incompatible ubuntu-latest upgrade.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm test
-      - name: Retain browser diagnostics on failure
-        if: failure()
+        env:
+          TEST_BROWSER: ${{ matrix.browser }}
+      - name: Retain rendered screenshots and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-failure-details
+          name: browser-acceptance-${{ matrix.browser }}
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7

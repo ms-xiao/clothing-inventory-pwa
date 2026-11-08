@@ -1,4 +1,4 @@
-# 衣记 · 小店进销存
+# 衣记 V1.1 · 小店进销存
 
 面向 iPhone、iPad 的轻量服装进销存 PWA。纯 HTML、CSS、JavaScript，无运行时依赖，无服务器、账号或云同步。启动时为空账本，不会写入演示数据。
 
@@ -24,7 +24,7 @@ npm start
 
 ## 安装与离线
 
-在 iOS/iPadOS Safari 中打开 HTTPS 地址，使用「分享 → 添加到主屏幕」。首次联网打开并等顶部显示「离线可用」，以后可离线打开、登记、搜索和备份。所有字体、脚本、图标均来自本站，不使用外部 CDN。
+在 iOS/iPadOS Safari 中打开 HTTPS 地址，使用「分享 → 添加到主屏幕」。首次联网打开并等导航菜单或 iPad 侧栏显示「离线可用」，以后可离线打开、登记、搜索和备份。所有字体、脚本、图标均来自本站，不使用外部 CDN。
 
 应用更新会显示「更新应用」，用户主动更新后才激活新缓存；未提交的表单会提示确认。缓存与部署子路径绑定，版本更新需要递增 `sw.js` 的 `VERSION`。
 
@@ -49,7 +49,9 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
-测试启动本地服务器，在真实浏览器中验证 IndexedDB 事务、库存增减、超售回滚、非法输入、多规格、并发、持久化、备份恢复、完整 UI 流程及 PWA 子路径离线打开。GitHub Actions 在 Pull Request 与 main 提交时执行。
+测试启动本地服务器，在真实浏览器中验证 IndexedDB 事务、库存增减、超售回滚、非法输入、多规格、并发、持久化、备份恢复、完整 UI 流程及 PWA 子路径离线打开。V1.1 补充款式搜索完整合计、精确规格选择、自然日概览、旧版真实 Service Worker 升级、多尺寸、大字体与截图验收。升级测试通过 `git show 50c9b46:文件` 运行原版，需完整 Git 历史（浅克隆先 `git fetch --unshallow`）。GitHub Actions 自动执行 Chromium 与 WebKit 两套测试，并保留截图产物。
+
+本地补充 WebKit：`npx playwright install --with-deps webkit` 后执行 `TEST_BROWSER=webkit npm test`。两者均不等同于 iOS Safari 真机验证。
 
 ## GitHub Pages
 
@@ -59,11 +61,11 @@ npm test
 
 首次启用需仓库允许 Pages/Actions 且具备相应权限。工作流会尝试启用 Pages；若组织策略阻止，请在 Settings → Pages 中选择 GitHub Actions。只有部署任务成功且实际 URL 可访问，才算部署完成。PR 未合并时 main 不包含第一版应用，合并后会自动部署。
 
-本次首次部署实际受阻：`configure-pages` 创建站点时返回 `Resource not accessible by integration`。当前 Actions 令牌无法首次创建 Pages 站点，尚无已验证的公开预览。仓库管理员可打开 Settings → Pages，将 Source 设为 GitHub Actions，再到 Actions 中打开开发分支失败的 Deploy GitHub Pages 运行，选择 Re-run all jobs。若部署环境仅允许 main，可合并 PR 后由 main 自动部署。工作流部署不会上传本地账本或备份数据。
+公开预览：<https://ms-xiao.github.io/clothing-inventory-pwa/>。当前站点使用 GitHub Actions，已有环境规则允许 `main` 与 `feat/local-inventory-v1`；改版沿用规则，不合并 PR、不修改 main。最新部署与验收结果见 PR #1 和 TESTING.md。工作流只发布应用静态文件，不发布设计图、测试数据、截图或备份。
 
 ## 文件结构
 
-- `index.html` / `styles.css`：响应式界面与移动端底部导航。
+- `index.html` / `styles.css`：iOS 分组界面、手机顶部菜单与 iPad 可收起侧边栏。
 - `js/app.js`：页面、输入、反馈和恢复确认。
 - `js/db.js`：数据模型、原子事务、备份校验。
 - `sw.js` / `manifest.webmanifest` / `icons/`：PWA 与离线资源。
@@ -72,4 +74,12 @@ npm test
 
 ## 当前范围
 
-单设备本地账本；没有同步、账号、会员、支付、员工、多商户或复杂报表。第一版流水只追加，不提供退货、撤销、盘点调整或删除操作。大量商品和历史记录暂未分页。主屏幕安装、iOS 存储回收行为和长时间离线仍需在目标真机上进一步验收。
+单设备本地账本；没有同步、账号、会员、支付、员工、多商户或复杂报表。第一版流水只追加，不提供退货、撤销、盘点调整或删除操作。历史记录按本地日期分组、每次显示 100 笔，可加载更多；商品暂未分页。主屏幕安装、iOS 存储回收行为和长时间离线仍需在目标真机上进一步验收。
+
+## V1.1 界面
+
+首页按设计附件 01A 实现四块真实概览（库存总数、暂无库存规格、今日进货件数、今日销售件数），以设备本地自然日统计。搜索与库存筛选匹配任一具体规格后，始终显示整款的完整库存。款式详情按颜色展示尺码、编辑规格、登记进销和最近记录；新增仍每次保存一个规格。
+
+手机右上角「＋」添加商品，「…」进入进货、销售、记录与设置；iPad 使用侧边栏。进销选择依次为款式、颜色、尺码，进价只读，实售单价可改；页内返回保留搜索、筛选和未提交的进销表单，刷新不保存草稿。浅色/深色跟随系统，支持安全区域、键盘焦点与减少动态效果。
+
+[设计映射](DESIGN_MAPPING.md) · [实际运行截图](docs/screenshots/README.md) · [测试详情](TESTING.md)
