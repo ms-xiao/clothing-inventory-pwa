@@ -1428,7 +1428,7 @@ test("v1 cached application upgrades only after consent and retains original dat
     );
     assert.equal(await page.locator("#update-banner").isVisible(), false);
     const caches = await page.evaluate(() => window.caches.keys());
-    assert.ok(caches.some((k) => k.endsWith("-v1.1.1")));
+    assert.ok(caches.some((k) => k.endsWith("-v1.1.2")));
     assert.ok(!caches.some((k) => k.endsWith("-v1")));
     await page.evaluate(async (backup) => {
       const db = await import("./js/db.js");
