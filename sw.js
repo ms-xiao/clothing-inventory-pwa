@@ -1,5 +1,5 @@
 /* Bump VERSION when any application asset changes. Caches are isolated by scope. */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.1.1';
 const BASE = self.registration.scope;
 const PREFIX = `yiji-${encodeURIComponent(BASE)}-`;
 const CACHE = `${PREFIX}${VERSION}`;

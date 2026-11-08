@@ -569,6 +569,7 @@ function closeMenu() {
 async function navigate(view, focus = true, fromHash = false) {
   if (busy) return;
   rememberView();
+  main.setAttribute("aria-busy", "true");
   try {
     await refresh();
     state.view = view.startsWith("style/") ? "detail" : view;
@@ -581,6 +582,8 @@ async function navigate(view, focus = true, fromHash = false) {
     if (focus) main.focus({ preventScroll: true });
   } catch (error) {
     toast(error.message, true);
+  } finally {
+    main.setAttribute("aria-busy", "false");
   }
 }
 function openSheet(content) {

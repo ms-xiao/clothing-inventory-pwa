@@ -166,6 +166,65 @@ async function withStore(run, options = {}) {
   }
 }
 
+// Fail real HTTP transport instead of using the browser inspector's offline flag.
+// Both engines must reopen from their existing Service Worker with no server data.
+async function withOfflineStore(run) {
+  let disconnected = false;
+  const root = new URL("../", import.meta.url);
+  const allowed = new Set([
+    "index.html",
+    "styles.css",
+    "sw.js",
+    "manifest.webmanifest",
+    "js/app.js",
+    "js/db.js",
+    "icons/icon.svg",
+    "icons/icon-180.png",
+    "icons/icon-192.png",
+    "icons/icon-512.png",
+  ]);
+  const host = createHTTPServer(async (req, res) => {
+    if (disconnected) {
+      req.socket.destroy();
+      return;
+    }
+    const path = new URL(req.url, "http://localhost").pathname;
+    const file = path.startsWith("/clothing-inventory-pwa/")
+      ? path.slice("/clothing-inventory-pwa/".length) || "index.html"
+      : "";
+    if (!allowed.has(file)) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const type = file.endsWith(".js")
+      ? "text/javascript"
+      : file.endsWith(".css")
+        ? "text/css"
+        : file.endsWith(".png")
+          ? "image/png"
+          : file.endsWith(".webmanifest")
+            ? "application/manifest+json"
+            : "text/html";
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+    res.end(await readFile(new URL(file, root)));
+  });
+  await new Promise((resolve) => host.listen(0, "127.0.0.1", resolve));
+  const previousURL = baseURL;
+  baseURL = `http://127.0.0.1:${host.address().port}/clothing-inventory-pwa/`;
+  try {
+    await withStore((page, context) =>
+      run(page, context, () => {
+        disconnected = true;
+      }),
+    );
+  } finally {
+    baseURL = previousURL;
+    host.closeAllConnections();
+    await new Promise((resolve) => host.close(resolve));
+  }
+}
+
 async function navigateUI(page, view) {
   const button = page.locator(`nav [data-view="${view}"]`);
   if (!(await button.isVisible()))
@@ -175,7 +234,9 @@ async function navigateUI(page, view) {
   await button.click();
   await page.waitForFunction(
     (v) =>
-      document.querySelector('nav [aria-current="page"]')?.dataset.view === v,
+      document.querySelector('nav [aria-current="page"]')?.dataset.view === v &&
+      document.querySelector("main").getAttribute("aria-busy") !== "true" &&
+      !document.body.classList.contains("menu-open"),
     view,
   );
 }
@@ -632,7 +693,7 @@ test("backup round-trip restores exactly; invalid backups never replace current 
 });
 
 test("manifest and fully cached app work offline under the GitHub Pages subpath", async () => {
-  await withStore(async (page, context) => {
+  await withOfflineStore(async (page, context, disconnect) => {
     const response = await page.request.get(
       new URL("manifest.webmanifest", baseURL).href,
     );
@@ -661,7 +722,8 @@ test("manifest and fully cached app work offline under the GitHub Pages subpath"
         }),
       product.id,
     );
-    await context.setOffline(true);
+    disconnect();
+    await assert.rejects(fetch(baseURL, { signal: AbortSignal.timeout(2000) }));
     await page.close();
     const offline = await context.newPage();
     await offline.goto(baseURL);
@@ -684,7 +746,6 @@ test("manifest and fully cached app work offline under the GitHub Pages subpath"
       ),
       2,
     );
-    await context.setOffline(false);
   });
 });
 
@@ -1271,7 +1332,12 @@ test("v1 cached application upgrades only after consent and retains original dat
     ]),
   );
   let legacy = true;
+  let disconnected = false;
   const host = createHTTPServer(async (req, res) => {
+    if (disconnected) {
+      req.socket.destroy();
+      return;
+    }
     const path = new URL(req.url, "http://localhost").pathname;
     const file = path.startsWith("/clothing-inventory-pwa/")
       ? path.slice("/clothing-inventory-pwa/".length) || "index.html"
@@ -1362,14 +1428,15 @@ test("v1 cached application upgrades only after consent and retains original dat
     );
     assert.equal(await page.locator("#update-banner").isVisible(), false);
     const caches = await page.evaluate(() => window.caches.keys());
-    assert.ok(caches.some((k) => k.endsWith("-v1.1.0")));
+    assert.ok(caches.some((k) => k.endsWith("-v1.1.1")));
     assert.ok(!caches.some((k) => k.endsWith("-v1")));
     await page.evaluate(async (backup) => {
       const db = await import("./js/db.js");
       db.validateBackup(backup);
       await db.restoreBackup(backup);
     }, before);
-    await context.setOffline(true);
+    disconnected = true;
+    await assert.rejects(fetch(url, { signal: AbortSignal.timeout(2000) }));
     await page.close();
     const offline = await context.newPage();
     await offline.goto(url);
